@@ -63,6 +63,9 @@ parser.add_argument('--num_gpus', type=int, default=1,
 parser.add_argument('--log_device_placement', type=bool, default=False,
                     help='Whether to log device placement.')
 
+parser.add_argument('--iter_size', type=int, default=1,
+                    help='Number of iter size')
+
 
 def tower_loss(scope, images, labels):
   """Calculate the total loss on a single tower running the CIFAR model.
@@ -171,22 +174,30 @@ def train():
     with tf.variable_scope(tf.get_variable_scope()):
       for i in xrange(FLAGS.num_gpus):
         with tf.device('/gpu:%d' % i):
+          gpu_grads = []
           with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, i)) as scope:
-            # Dequeues one batch for the GPU
-            image_batch, label_batch = batch_queue.dequeue()
-            # Calculate the loss for one tower of the CIFAR model. This function
-            # constructs the entire CIFAR model but shares the variables across
-            # all towers.
-            loss = tower_loss(scope, image_batch, label_batch)
+            for iter in xrange(FLAGS.iter_size):
+              # Dequeues one batch for the GPU
+              image_batch, label_batch = batch_queue.dequeue()
+              # Calculate the loss for one tower of the CIFAR model. This function
+              # constructs the entire CIFAR model but shares the variables across
+              # all towers.
+              loss = tower_loss(scope, image_batch, label_batch)
 
-            # Reuse variables for the next tower.
-            tf.get_variable_scope().reuse_variables()
+              # Reuse variables for the next tower.
+              tf.get_variable_scope().reuse_variables()
 
-            # Retain the summaries from the final tower.
-            summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+              # Retain the summaries from the final tower.
+              summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
-            # Calculate the gradients for the batch of data on this CIFAR tower.
-            grads = opt.compute_gradients(loss)
+              # Calculate the gradients for the batch of data on this CIFAR tower.
+              grads = opt.compute_gradients(loss)
+
+              # Collect the gradients ( iter_size )
+              gpu_grads.append(grads)
+
+            # Average the collected gradients
+            grags = average_gradients(gpu_grads)
 
             # Keep track of the gradients across all towers.
             tower_grads.append(grads)
@@ -230,9 +241,18 @@ def train():
     # Start running operations on the Graph. allow_soft_placement must be set to
     # True to build towers on GPU, as some of the ops do not have GPU
     # implementations.
-    sess = tf.Session(config=tf.ConfigProto(
+    config=tf.ConfigProto(
         allow_soft_placement=True,
-        log_device_placement=FLAGS.log_device_placement))
+        log_device_placement=FLAGS.log_device_placement)
+
+    # only allocate needed memory size
+    #config.gpu_options.allow_growth=True
+    # visible gpu number
+    #config.gpu_options.visible_device_list='1,2,3,4'
+    # gpu memory usage restriction ratio
+    config.gpu_options.per_process_gpu_memory_fraction=0.9
+    sess = tf.Session(config=config)
+
     sess.run(init)
 
     # Start the queue runners.
@@ -240,7 +260,7 @@ def train():
 
     summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
-    for step in xrange(FLAGS.max_steps):
+    for step in xrange(int(FLAGS.max_steps / FLAGS.iter_size)):
       start_time = time.time()
       _, loss_value = sess.run([train_op, loss])
       duration = time.time() - start_time
@@ -248,9 +268,9 @@ def train():
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
       if step % 10 == 0:
-        num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
+        num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus * FLAGS.iter_size
         examples_per_sec = num_examples_per_step / duration
-        sec_per_batch = duration / FLAGS.num_gpus
+        sec_per_batch = duration / (FLAGS.num_gpus * FLAGS.iter_size)
 
         format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
