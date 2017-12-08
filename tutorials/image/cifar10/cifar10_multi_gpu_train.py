@@ -47,6 +47,7 @@ import time
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
+import tensorpack as tp
 import cifar10
 
 parser = cifar10.parser
@@ -153,7 +154,7 @@ def train():
     # Calculate the learning rate schedule.
     num_batches_per_epoch = (cifar10.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
                              FLAGS.batch_size)
-    decay_steps = int(num_batches_per_epoch * cifar10.NUM_EPOCHS_PER_DECAY)
+    decay_steps = int(num_batches_per_epoch * cifar10.NUM_EPOCHS_PER_DECAY / FLAGS.num_gpus)
 
     # Decay the learning rate exponentially based on the number of steps.
     lr = tf.train.exponential_decay(cifar10.INITIAL_LEARNING_RATE,
@@ -164,6 +165,8 @@ def train():
 
     # Create an optimizer that performs gradient descent.
     opt = tf.train.GradientDescentOptimizer(lr)
+    if(FLAGS.iter_size > 1):
+      opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
 
     # Get images and labels for CIFAR-10.
     images, labels = cifar10.distorted_inputs()
@@ -215,7 +218,28 @@ def train():
         summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
 
     # Apply the gradients to adjust the shared variables.
-    apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+    if(FLAGS.iter_size > 1):
+      apply_gradient_op = opt.apply_gradients(grads, global_step=None)
+
+      counter = tf.Variable(0, trainable=False, dtype=tf.int32)
+      def counter_add():
+        return tf.assign_add(counter, 1)
+      def counter_reset():
+        return tf.assign(counter, 0)
+
+      counter_op = tf.cond(tf.equal(counter, FLAGS.iter_size-1), counter_reset, counter_add)
+
+      def global_step_add(): 
+        tmp_op = tf.assign_add(global_step, 1)
+        return tf.group(tmp_op)
+
+      increment_global_step_cond_op = tf.cond(tf.equal(counter, FLAGS.iter_size-1), global_step_add, tf.no_op)
+
+      
+      #increment_global_step_cond_op = tf.assign(global_step, global_step + FLAGS.iter_size)
+    else:
+      apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+
 
     # Add histograms for trainable variables.
     for var in tf.trainable_variables():
@@ -227,7 +251,10 @@ def train():
     variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
     # Group all updates to into a single train op.
-    train_op = tf.group(apply_gradient_op, variables_averages_op)
+    if(FLAGS.iter_size > 1):
+      train_op = tf.group(apply_gradient_op, variables_averages_op, increment_global_step_cond_op, counter_op)
+    else:
+      train_op = tf.group(apply_gradient_op, variables_averages_op)
 
     # Create a saver.
     saver = tf.train.Saver(tf.global_variables())
@@ -246,11 +273,11 @@ def train():
         log_device_placement=FLAGS.log_device_placement)
 
     # only allocate needed memory size
-    #config.gpu_options.allow_growth=True
+    config.gpu_options.allow_growth=True
     # visible gpu number
     #config.gpu_options.visible_device_list='1,2,3,4'
     # gpu memory usage restriction ratio
-    config.gpu_options.per_process_gpu_memory_fraction=0.9
+    #config.gpu_options.per_process_gpu_memory_fraction=0.9
     sess = tf.Session(config=config)
 
     sess.run(init)
@@ -276,7 +303,9 @@ def train():
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value,
                              examples_per_sec, sec_per_batch))
-
+        print ('LR:%s' % (sess.run(lr)))
+        print ('Global Step:%s' % (sess.run(global_step)))
+        
       if step % 100 == 0:
         summary_str = sess.run(summary_op)
         summary_writer.add_summary(summary_str, step)
