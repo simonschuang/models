@@ -177,30 +177,22 @@ def train():
     with tf.variable_scope(tf.get_variable_scope()):
       for i in xrange(FLAGS.num_gpus):
         with tf.device('/gpu:%d' % i):
-          gpu_grads = []
           with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, i)) as scope:
-            for iter in xrange(FLAGS.iter_size):
-              # Dequeues one batch for the GPU
-              image_batch, label_batch = batch_queue.dequeue()
-              # Calculate the loss for one tower of the CIFAR model. This function
-              # constructs the entire CIFAR model but shares the variables across
-              # all towers.
-              loss = tower_loss(scope, image_batch, label_batch)
+            # Dequeues one batch for the GPU
+            image_batch, label_batch = batch_queue.dequeue()
+            # Calculate the loss for one tower of the CIFAR model. This function
+            # constructs the entire CIFAR model but shares the variables across
+            # all towers.
+            loss = tower_loss(scope, image_batch, label_batch)
 
-              # Reuse variables for the next tower.
-              tf.get_variable_scope().reuse_variables()
+            # Reuse variables for the next tower.
+            tf.get_variable_scope().reuse_variables()
 
-              # Retain the summaries from the final tower.
-              summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+            # Retain the summaries from the final tower.
+            summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
-              # Calculate the gradients for the batch of data on this CIFAR tower.
-              grads = opt.compute_gradients(loss)
-
-              # Collect the gradients ( iter_size )
-              gpu_grads.append(grads)
-
-            # Average the collected gradients
-            grags = average_gradients(gpu_grads)
+            # Calculate the gradients for the batch of data on this CIFAR tower.
+            grads = opt.compute_gradients(loss)
 
             # Keep track of the gradients across all towers.
             tower_grads.append(grads)
@@ -287,7 +279,7 @@ def train():
 
     summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
-    for step in xrange(int(FLAGS.max_steps / FLAGS.iter_size)):
+    for step in xrange(FLAGS.max_steps):
       start_time = time.time()
       _, loss_value = sess.run([train_op, loss])
       duration = time.time() - start_time
