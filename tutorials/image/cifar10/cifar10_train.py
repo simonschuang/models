@@ -57,6 +57,11 @@ parser.add_argument('--log_device_placement', type=bool, default=False,
 parser.add_argument('--log_frequency', type=int, default=10,
                     help='How often to log results to the console.')
 
+parser.add_argument('--apply_pbt', type=bool, default=False,
+                    help='Apply Population-based Tranining from DeepMind.')
+
+parser.add_argument('--pbt_ready_frequency', type=int, default=20,
+                    help='How many steps until ready.')
 
 def train():
   """Train CIFAR-10 for a number of steps."""
@@ -92,6 +97,15 @@ def train():
         return tf.train.SessionRunArgs(loss)  # Asks for loss value.
 
       def after_run(self, run_context, run_values):
+        # PBT - eval
+        print ("eval for step: %d" % self._step)
+
+        # PBT - ready->exploit->explore->change hyperparams
+        if self._step % FLAGS.pbt_ready_frequency == 0:
+          print ("ready, pass to exploit")
+          print ("exploit, t-test")
+          print ("explore cross-over, mutation")
+
         if self._step % FLAGS.log_frequency == 0:
           current_time = time.time()
           duration = current_time - self._start_time
@@ -118,6 +132,11 @@ def train():
 
 
 def main(argv=None):  # pylint: disable=unused-argument
+
+  print ("batch_size: %d" % (FLAGS.batch_size))
+  print ("Apply PBT: %s" % (FLAGS.apply_pbt))
+  print ("log_device_placement: %s" % (FLAGS.log_device_placement))
+
   cifar10.maybe_download_and_extract()
   if tf.gfile.Exists(FLAGS.train_dir):
     tf.gfile.DeleteRecursively(FLAGS.train_dir)
