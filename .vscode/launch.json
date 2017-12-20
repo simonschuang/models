@@ -12,7 +12,9 @@
                 "--batch_size", "128",
                 "--log_device_placement", "true",
                 "--apply_pbt", "true",
-                "--pbt_ready_frequency", "20"
+                "--pbt_ready_frequency", "20",
+                "--pbt_population", "10",
+                "--pbt_truncate_percentage", "20",
             ],
             "stopOnEntry": true,
             "pythonPath": "${config:python.pythonPath}",
