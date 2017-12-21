@@ -209,28 +209,6 @@ def train():
       if grad is not None:
         summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
 
-    # Apply the gradients to adjust the shared variables.
-    #if(FLAGS.iter_size > 1):
-    #  apply_gradient_op = opt.apply_gradients(grads, global_step=None)
-
-    #  counter = tf.Variable(0, trainable=False, dtype=tf.int32)
-    #  def counter_add():
-    #    return tf.assign_add(counter, 1)
-    #  def counter_reset():
-    #    return tf.assign(counter, 0)
-
-    #  counter_op = tf.cond(tf.equal(counter, FLAGS.iter_size-1), counter_reset, counter_add)
-
-    #  def global_step_add(): 
-    #    tmp_op = tf.assign_add(global_step, 1)
-    #    return tf.group(tmp_op)
-
-    #  increment_global_step_cond_op = tf.cond(tf.equal(counter, FLAGS.iter_size-1), global_step_add, tf.no_op)
-
-      
-      #increment_global_step_cond_op = tf.assign(global_step, global_step + FLAGS.iter_size)
-    #else:
-    #  apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
     apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
 
 
@@ -244,10 +222,6 @@ def train():
     variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
     # Group all updates to into a single train op.
-    #if(FLAGS.iter_size > 1):
-    #  train_op = tf.group(apply_gradient_op, variables_averages_op, increment_global_step_cond_op, counter_op)
-    #else:
-    #  train_op = tf.group(apply_gradient_op, variables_averages_op)
     train_op = tf.group(apply_gradient_op, variables_averages_op)
 
     # Create a saver.
