@@ -47,6 +47,7 @@ import time
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
+from tensorflow.python import debug as tfdbg
 import tensorpack as tp
 import cifar10
 
@@ -67,6 +68,8 @@ parser.add_argument('--log_device_placement', type=bool, default=False,
 parser.add_argument('--iter_size', type=int, default=1,
                     help='Number of iter size')
 
+parser.add_argument('--debug', type=bool, nargs="?", const=True, default=False,
+                    help="Use debugger to track down bad values during training")
 
 def tower_loss(scope, images, labels):
   """Calculate the total loss on a single tower running the CIFAR model.
@@ -271,6 +274,10 @@ def train():
     # gpu memory usage restriction ratio
     #config.gpu_options.per_process_gpu_memory_fraction=0.9
     sess = tf.Session(config=config)
+
+    # Enable Debugger
+    if FLAGS.debug:
+      sess = tfdbg.LocalCLIDebugWrapperSession(sess, ui_type="curses")
 
     sess.run(init)
 
