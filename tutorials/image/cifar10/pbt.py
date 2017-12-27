@@ -7,7 +7,11 @@
 """
 
 def exploit():
-  return 
+  return 'Ready, do Exploit'
 
-def explore():
-  return
+def explore(cross_over, mutation):
+  #if cross_over:
+    #do crossover
+  #if mutation:
+    #do mutation
+  return 'Do explore'

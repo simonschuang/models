@@ -48,8 +48,9 @@ import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 from tensorflow.python import debug as tfdbg
-import tensorpack as tp
+#import tensorpack as tp
 import cifar10
+import pbt
 
 parser = cifar10.parser
 
@@ -67,6 +68,9 @@ parser.add_argument('--log_device_placement', type=bool, default=False,
 
 parser.add_argument('--iter_size', type=int, default=1,
                     help='Number of iter size')
+
+parser.add_argument('--pbt_ready_frequency', type=int, default=20,
+                    help='Number of steps until ready')
 
 parser.add_argument('--debug', type=bool, nargs="?", const=True, default=False,
                     help="Use debugger to track down bad values during training")
@@ -168,8 +172,8 @@ def train():
 
     # Create an optimizer that performs gradient descent.
     opt = tf.train.GradientDescentOptimizer(lr)
-    if(FLAGS.iter_size > 1):
-      opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
+    #if(FLAGS.iter_size > 1):
+    #  opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
 
     # Get images and labels for CIFAR-10.
     images, labels = cifar10.distorted_inputs()
@@ -187,6 +191,8 @@ def train():
             # constructs the entire CIFAR model but shares the variables across
             # all towers.
             loss = tower_loss(scope, image_batch, label_batch)
+            print ('/gpu:%d' % i)
+            tf.Print(loss,[loss])
 
             # Reuse variables for the next tower.
             tf.get_variable_scope().reuse_variables()
@@ -302,8 +308,10 @@ def train():
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value,
                              examples_per_sec, sec_per_batch))
-        print ('LR:%s' % (sess.run(lr)))
-        print ('Global Step:%s' % (sess.run(global_step)))
+
+      if step % FLAGS.pbt_ready_frequency == 0:
+        print (pbt.exploit())
+        print (pbt.explore(mutation=True, cross_over=True))
         
       if step % 100 == 0:
         summary_str = sess.run(summary_op)
