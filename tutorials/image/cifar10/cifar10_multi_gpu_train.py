@@ -69,8 +69,17 @@ parser.add_argument('--log_device_placement', type=bool, default=False,
 parser.add_argument('--iter_size', type=int, default=1,
                     help='Number of iter size')
 
+parser.add_argument('--apply_pbt', type=bool, nargs="?", const=True, default=False,
+                    help='Whether to apply Population Based Training.')
+
 parser.add_argument('--pbt_ready_frequency', type=int, default=20,
-                    help='Number of steps until ready')
+                    help='How many steps until ready.')
+
+parser.add_argument('--pbt_population', type=int, default=10,
+                    help='Size of population, default=10')
+
+parser.add_argument('--pbt_truncate_percentage', type=int, default=20,
+                    help='Percentage of truncate during explore stage in PBT, default=20')
 
 parser.add_argument('--debug', type=bool, nargs="?", const=True, default=False,
                     help="Use debugger to track down bad values during training")
@@ -84,7 +93,7 @@ def tower_loss(scope, images, labels):
     labels: Labels. 1D tensor of shape [batch_size].
 
   Returns:
-     Tensor of shape [] containing the total loss for a batch of data
+    Tensor of shape [] containing the total loss for a batch of data
   """
 
   # Build inference Graph.
@@ -121,8 +130,8 @@ def average_gradients(tower_grads):
       is over individual gradients. The inner list is over the gradient
       calculation for each tower.
   Returns:
-     List of pairs of (gradient, variable) where the gradient has been averaged
-     across all towers.
+    List of pairs of (gradient, variable) where the gradient has been averaged
+    across all towers.
   """
   average_grads = []
   for grad_and_vars in zip(*tower_grads):
@@ -160,18 +169,19 @@ def train():
 
     # Calculate the learning rate schedule.
     num_batches_per_epoch = (cifar10.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
-                             FLAGS.batch_size)
+                            FLAGS.batch_size)
     decay_steps = int(num_batches_per_epoch * cifar10.NUM_EPOCHS_PER_DECAY / FLAGS.num_gpus)
 
     # Decay the learning rate exponentially based on the number of steps.
-    lr = tf.train.exponential_decay(cifar10.INITIAL_LEARNING_RATE,
+    lrs = []
+    for i in xrange(FLAGS.num_gpus):
+      lr = tf.train.exponential_decay(pbt.random_init_lr(),
                                     global_step,
                                     decay_steps,
                                     cifar10.LEARNING_RATE_DECAY_FACTOR,
                                     staircase=True)
+      lrs.append(lr)
 
-    # Create an optimizer that performs gradient descent.
-    opt = tf.train.GradientDescentOptimizer(lr)
     #if(FLAGS.iter_size > 1):
     #  opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
 
@@ -187,12 +197,14 @@ def train():
           with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, i)) as scope:
             # Dequeues one batch for the GPU
             image_batch, label_batch = batch_queue.dequeue()
+
+            # Create an optimizer that performs gradient descent.
+            opt = tf.train.GradientDescentOptimizer(lrs[i])
+            
             # Calculate the loss for one tower of the CIFAR model. This function
             # constructs the entire CIFAR model but shares the variables across
             # all towers.
             loss = tower_loss(scope, image_batch, label_batch)
-            print ('/gpu:%d' % i)
-            tf.Print(loss,[loss])
 
             # Reuse variables for the next tower.
             tf.get_variable_scope().reuse_variables()
@@ -307,7 +319,10 @@ def train():
         format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value,
-                             examples_per_sec, sec_per_batch))
+                            examples_per_sec, sec_per_batch))
+        for i in xrange(FLAGS.num_gpus):
+          print ('LRs:%s' % (sess.run(lrs[i])))
+        print ('Global Step:%s' % (sess.run(global_step)))
 
       if step % FLAGS.pbt_ready_frequency == 0:
         print (pbt.exploit())
