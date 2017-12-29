@@ -10,6 +10,8 @@
             "request": "launch",
             "args": [
                 "--batch_size", "128",
+                "--batch_size_upper", "128",
+                "--batch_size_lower", "32",
                 "--log_device_placement", "true",
                 "--apply_pbt", "true",
                 "--pbt_ready_frequency", "20",

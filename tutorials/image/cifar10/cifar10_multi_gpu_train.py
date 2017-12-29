@@ -186,9 +186,21 @@ def train():
     #  opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
 
     # Get images and labels for CIFAR-10.
-    images, labels = cifar10.distorted_inputs()
-    batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+    upper_bs = FLAGS.batch_size_upper # 128
+    lower_bs = FLAGS.batch_size_lower # 32
+    bs_list = list(range(lower_bs, upper_bs+1, 32))
+
+    images_list = []
+    labels_list = []
+    batch_queue_list = []
+    for batch_size in bs_list:
+      images, labels = cifar10.distorted_inputs(batch_size)
+      batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
           [images, labels], capacity=2 * FLAGS.num_gpus)
+      images_list.append(images)
+      labels_list.append(labels)
+      batch_queue_list.append(batch_queue)
+
     # Calculate the gradients for each model tower.
     tower_grads = []
     with tf.variable_scope(tf.get_variable_scope()):
@@ -324,7 +336,7 @@ def train():
           print ('LRs:%s' % (sess.run(lrs[i])))
         print ('Global Step:%s' % (sess.run(global_step)))
 
-      if step % FLAGS.pbt_ready_frequency == 0:
+      if (step+1) % FLAGS.pbt_ready_frequency == 0 :
         print (pbt.exploit())
         print (pbt.explore(mutation=True, cross_over=True))
         
