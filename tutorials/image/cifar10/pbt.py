@@ -17,7 +17,7 @@ def explore(learning_rates, batch_sizes):
   #do crossover
   
   #do mutation
-  return 'Do explore'
+  return learning_rates, batch_sizes
 
 def random_init_lr():
   return random.uniform(INITIAL_LEARNING_RATE_LOWER_BOUND,
