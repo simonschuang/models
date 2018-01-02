@@ -239,7 +239,7 @@ def train():
             tower_grads.append(grads)
 
             # PBT, store loss of every tower
-            losses.append(loss)
+            tower_losses.append(loss)
 
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all towers.
