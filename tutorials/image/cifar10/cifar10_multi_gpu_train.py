@@ -43,6 +43,7 @@ from datetime import datetime
 import os.path
 import re
 import time
+import random
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -173,7 +174,7 @@ def train():
     decay_steps = int(num_batches_per_epoch * cifar10.NUM_EPOCHS_PER_DECAY / FLAGS.num_gpus)
 
     # Decay the learning rate exponentially based on the number of steps.
-    lrs = []
+    lrs = [] # learning rate selection
     for i in xrange(FLAGS.num_gpus):
       lr = tf.train.exponential_decay(pbt.random_init_lr(),
                                     global_step,
@@ -189,6 +190,10 @@ def train():
     upper_bs = FLAGS.batch_size_upper # 128
     lower_bs = FLAGS.batch_size_lower # 32
     bs_list = list(range(lower_bs, upper_bs+1, 32))
+    bss = [] # batch size selections
+    for i in xrange(FLAGS.num_gpus):
+      bs = random.randint(0,len(bs_list)-1)
+      bss.append(bs)
 
     images_list = []
     labels_list = []
@@ -203,12 +208,15 @@ def train():
 
     # Calculate the gradients for each model tower.
     tower_grads = []
+    # Store loss of each tower
+    tower_losses = []
     with tf.variable_scope(tf.get_variable_scope()):
       for i in xrange(FLAGS.num_gpus):
         with tf.device('/gpu:%d' % i):
           with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, i)) as scope:
             # Dequeues one batch for the GPU
-            image_batch, label_batch = batch_queue.dequeue()
+            # According to which batch_queue the tower uses
+            image_batch, label_batch = batch_queue_list[bss[i]].dequeue()
 
             # Create an optimizer that performs gradient descent.
             opt = tf.train.GradientDescentOptimizer(lrs[i])
@@ -229,6 +237,9 @@ def train():
 
             # Keep track of the gradients across all towers.
             tower_grads.append(grads)
+
+            # PBT, store loss of every tower
+            losses.append(loss)
 
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all towers.
@@ -337,8 +348,13 @@ def train():
         print ('Global Step:%s' % (sess.run(global_step)))
 
       if (step+1) % FLAGS.pbt_ready_frequency == 0 :
+        print ('bss[%d]:' % len(bss))
+        for bs in bss:
+          print(bs)
+        # combine or substitute lr and bs
         print (pbt.exploit())
-        print (pbt.explore(mutation=True, cross_over=True))
+        # find new lr and bs
+        lrs, bss = pbt.explore(learning_rates=lrs, batch_sizes=bss)
         
       if step % 100 == 0:
         summary_str = sess.run(summary_op)
