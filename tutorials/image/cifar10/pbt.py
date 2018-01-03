@@ -39,21 +39,24 @@ def exploit(losses, hyperparams):
   
   print ('old hyperparameters')
   for item in hyperparams:
-    print item,
+    print item
   print '\n'
 
   print ('Loss of each tower')
   print (losses)
   
-  top_indices = sorted(range(POPULATION), key=lambda i: losses[i])[-REPLACE_TOWER:]
-  bottom_indices = sorted(range(POPULATION), key=lambda i: losses[i])[:REPLACE_TOWER]
+  bad_indices = sorted(range(POPULATION), key=lambda i: losses[i])[-REPLACE_TOWER:]
+  good_indices = sorted(range(POPULATION), key=lambda i: losses[i])[:REPLACE_TOWER]
+
+  print (bad_indices)
+  print (good_indices)
 
   for i in xrange(REPLACE_TOWER):
-    hyperparams[bottom_indices[i]] = hyperparams[top_indices[i]]
+    hyperparams[bad_indices[i]] = hyperparams[good_indices[i]]
 
   print ('new hyperparameters')
   for item in hyperparams:
-    print item,
+    print item
   print '\n'
 
   return hyperparams
