@@ -76,9 +76,6 @@ parser.add_argument('--apply_pbt', type=bool, nargs="?", const=True, default=Fal
 parser.add_argument('--pbt_ready_frequency', type=int, default=20,
                     help='How many steps until ready.')
 
-parser.add_argument('--pbt_population', type=int, default=10,
-                    help='Size of population, default=10')
-
 parser.add_argument('--pbt_truncate_percentage', type=int, default=20,
                     help='Percentage of truncate during explore stage in PBT, default=20')
 
@@ -209,7 +206,8 @@ def train():
     # Calculate the gradients for each model tower.
     tower_grads = []
     # Store loss of each tower
-    tower_losses = []
+    tower_losses = range(FLAGS.num_gpus)
+
     with tf.variable_scope(tf.get_variable_scope()):
       for i in xrange(FLAGS.num_gpus):
         with tf.device('/gpu:%d' % i):
@@ -239,7 +237,7 @@ def train():
             tower_grads.append(grads)
 
             # PBT, store loss of every tower
-            tower_losses.append(loss)
+            tower_losses[i] = loss
 
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all towers.
@@ -322,6 +320,9 @@ def train():
 
     sess.run(init)
 
+    # Setup Population Based Training
+    pbt.setup(sess, FLAGS.num_gpus, FLAGS.pbt_truncate_percentage)
+
     # Start the queue runners.
     tf.train.start_queue_runners(sess=sess)
 
@@ -350,9 +351,11 @@ def train():
       if (step+1) % FLAGS.pbt_ready_frequency == 0 :
         print ('bss[%d]:' % len(bss))
         for bs in bss:
-          print(bs)
+          print (bs, end=" ")
+        print ('\n')
         # combine or substitute lr and bs
-        print (pbt.exploit())
+        lrs = pbt.exploit(losses = tower_losses, hyperparams=lrs)
+        bss = pbt.exploit(losses = tower_losses, hyperparams=bss)
         # find new lr and bs
         lrs, bss = pbt.explore(learning_rates=lrs, batch_sizes=bss)
         
@@ -377,3 +380,4 @@ def main(argv=None):  # pylint: disable=unused-argument
 if __name__ == '__main__':
   FLAGS = parser.parse_args()
   tf.app.run()
+
