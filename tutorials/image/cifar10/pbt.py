@@ -14,7 +14,7 @@ INITIAL_LEARNING_RATE_LOWER_BOUND = 0.01
 # num of tower = num of GPUs, calculate num of tower to be replaced
 REPLACE_TOWER = 0
 POPULATION = 0
-Session = None
+sess = None
 
 class hyperparam:
   def __init(self):
@@ -24,8 +24,8 @@ class hyperparam:
 def setup(session, population, truncate_percentage):
   global POPULATION
   global REPLACE_TOWER
-  global Session
-  Session = session
+  global sess
+  sess = session
   POPULATION = population
   REPLACE_TOWER = (population * truncate_percentage + 100) / 100
   print ('Setup replace %d of tower hyperparam' % REPLACE_TOWER)
@@ -42,17 +42,11 @@ def exploit(losses, hyperparams):
     print item,
   print '\n'
 
-  loss_list = []
-  for loss in losses:
-    loss_list.append(Session.run(loss))
-  
   print ('Loss of each tower')
-  for item in loss_list:
-    print item,
-  print '\n'
+  print (losses)
   
-  top_indices = sorted(range(POPULATION), key=lambda i: loss_list[i])[-REPLACE_TOWER:]
-  bottom_indices = sorted(range(POPULATION), key=lambda i: loss_list[i])[:REPLACE_TOWER]
+  top_indices = sorted(range(POPULATION), key=lambda i: losses[i])[-REPLACE_TOWER:]
+  bottom_indices = sorted(range(POPULATION), key=lambda i: losses[i])[:REPLACE_TOWER]
 
   for i in xrange(REPLACE_TOWER):
     hyperparams[bottom_indices[i]] = hyperparams[top_indices[i]]

@@ -330,10 +330,11 @@ def train():
 
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
-      _, loss_value = sess.run([train_op, loss])
+      _, loss_values = sess.run([train_op, tower_losses])
       duration = time.time() - start_time
 
-      assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
+      for loss_value in loss_values:
+        assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
       if step % 10 == 0:
         num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus * FLAGS.iter_size
@@ -344,9 +345,6 @@ def train():
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value,
                             examples_per_sec, sec_per_batch))
-        for i in xrange(FLAGS.num_gpus):
-          print ('LRs:%s' % (sess.run(lrs[i])))
-        print ('Global Step:%s' % (sess.run(global_step)))
 
       if (step+1) % FLAGS.pbt_ready_frequency == 0 :
         print ('bss[%d]:' % len(bss))
@@ -354,8 +352,8 @@ def train():
           print (bs, end=" ")
         print ('\n')
         # combine or substitute lr and bs
-        lrs = pbt.exploit(losses = tower_losses, hyperparams=lrs)
-        bss = pbt.exploit(losses = tower_losses, hyperparams=bss)
+        lrs = pbt.exploit(losses = loss_values, hyperparams=lrs)
+        bss = pbt.exploit(losses = loss_values, hyperparams=bss)
         # find new lr and bs
         lrs, bss = pbt.explore(learning_rates=lrs, batch_sizes=bss)
         
