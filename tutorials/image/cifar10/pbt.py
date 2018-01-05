@@ -61,11 +61,24 @@ def exploit(losses, hyperparams):
 
   return hyperparams
 
-def explore(learning_rates, batch_sizes):
+def explore(hyperparams, shift_right=True):
+  print ('do Explore')
+  print ('old hyperparameters')
+  for item in hyperparams:
+    print item
+  print '\n'
   #do crossover
-  
+  if (random.random() < 0.8):
+    if (shift_right):
+      hyperparams.insert(0,hyperparams.pop(-1))
+    else:
+      hyperparams.append(hyperparams.pop(0))
   #do mutation
-  return learning_rates, batch_sizes
+  print ('new hyperparameters')
+  for item in hyperparams:
+    print item
+  print '\n'
+  return hyperparams 
 
 def random_init_lr():
   return random.uniform(INITIAL_LEARNING_RATE_LOWER_BOUND,

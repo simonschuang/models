@@ -355,7 +355,8 @@ def train():
         lrs = pbt.exploit(losses = loss_values, hyperparams=lrs)
         bss = pbt.exploit(losses = loss_values, hyperparams=bss)
         # find new lr and bs
-        lrs, bss = pbt.explore(learning_rates=lrs, batch_sizes=bss)
+        lrs = pbt.explore(hyperparams=lrs, shift_right=True)
+        bss = pbt.explore(hyperparams=bss, shift_right=False)
         
       if step % 100 == 0:
         summary_str = sess.run(summary_op)
