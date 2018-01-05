@@ -355,8 +355,18 @@ def train():
         lrs = pbt.exploit(losses = loss_values, hyperparams=lrs)
         bss = pbt.exploit(losses = loss_values, hyperparams=bss)
         # find new lr and bs
-        lrs = pbt.explore(hyperparams=lrs, shift_right=True)
-        bss = pbt.explore(hyperparams=bss, shift_right=False)
+        lrs = pbt.explore(hyperparams=lrs, shift_right=True, hptype='learning_rate')
+        for idx,item in enumerate(lrs):
+          if isinstance(item, np.float64):
+            #print ('new lrs: %f' % item)
+            lr = tf.train.exponential_decay(item,
+                                    global_step,
+                                    decay_steps,
+                                    cifar10.LEARNING_RATE_DECAY_FACTOR,
+                                    staircase=True)
+            lrs[idx]=lr
+
+        bss = pbt.explore(hyperparams=bss, shift_right=False, hptype='batch_size')
         
       if step % 100 == 0:
         summary_str = sess.run(summary_op)

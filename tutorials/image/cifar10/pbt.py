@@ -6,6 +6,7 @@ explore() - Perform cross-over and mutation
 
 """
 import random
+import tensorflow as tf
 from six.moves import xrange
 
 INITIAL_LEARNING_RATE_UPPER_BOUND = 0.2
@@ -48,8 +49,8 @@ def exploit(losses, hyperparams):
   bad_indices = sorted(range(POPULATION), key=lambda i: losses[i])[-REPLACE_TOWER:]
   good_indices = sorted(range(POPULATION), key=lambda i: losses[i])[:REPLACE_TOWER]
 
-  print (bad_indices)
-  print (good_indices)
+  print ('bad losses: %s' % (bad_indices))
+  print ('good losses: %s' % (good_indices))
 
   for i in xrange(REPLACE_TOWER):
     hyperparams[bad_indices[i]] = hyperparams[good_indices[i]]
@@ -61,19 +62,26 @@ def exploit(losses, hyperparams):
 
   return hyperparams
 
-def explore(hyperparams, shift_right=True):
+def explore(hyperparams, shift_right=True, hptype=None):
   print ('do Explore')
   print ('old hyperparameters')
   for item in hyperparams:
     print item
   print '\n'
   #do crossover
-  if (random.random() < 0.8):
-    if (shift_right):
-      hyperparams.insert(0,hyperparams.pop(-1))
-    else:
-      hyperparams.append(hyperparams.pop(0))
+#  if (shift_right):
+#    hyperparams.insert(0,hyperparams.pop(-1))
+#  else:
+#    hyperparams.append(hyperparams.pop(0))
   #do mutation
+  for idx, item in enumerate(hyperparams):
+   if (hptype=='learning_rate'):
+     print sess.run(item)
+     lr=sess.run(item) * random.choice([0.8,1.2])
+     #print ('new LR = %f ' % lr)
+     hyperparams[idx] = lr
+   elif (hptype=='batch_size'):
+     print ('explore batch size')
   print ('new hyperparameters')
   for item in hyperparams:
     print item
