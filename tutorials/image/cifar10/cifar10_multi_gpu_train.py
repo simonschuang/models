@@ -347,17 +347,18 @@ def train():
                             examples_per_sec, sec_per_batch))
 
       if (step+1) % FLAGS.pbt_ready_frequency == 0 :
-        print ('bss[%d]:' % len(bss))
-        for bs in bss:
-          print (bs, end=" ")
-        print ('\n')
+        # Record changed hyperparams in exploit step
+        changed_hp = [False for _ in range(FLAGS.num_gpus)]
+        print (changed_hp)
         # combine or substitute lr and bs
-        lrs = pbt.exploit(losses = loss_values, hyperparams=lrs)
-        bss = pbt.exploit(losses = loss_values, hyperparams=bss)
+        new_lrs = pbt.exploit(losses = loss_values, hyperparams=lrs, changed_hp=changed_hp)
+        new_bss = pbt.exploit(losses = loss_values, hyperparams=bss, changed_hp=changed_hp)
+        print (changed_hp)
+          
         # find new lr and bs
-        lrs = pbt.explore(hyperparams=lrs, shift_right=True, hptype='learning_rate')
+        lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         for idx,item in enumerate(lrs):
-          if isinstance(item, np.float64):
+          if isinstance(item, np.float64): # New lr
             #print ('new lrs: %f' % item)
             lr = tf.train.exponential_decay(item,
                                     global_step,
@@ -366,7 +367,7 @@ def train():
                                     staircase=True)
             lrs[idx]=lr
 
-        bss = pbt.explore(hyperparams=bss, shift_right=False, hptype='batch_size')
+        bss = pbt.explore(hyperparams=bss, changed_hp=changed_hp, shift_right=False, hptype='batch_size')
         
       if step % 100 == 0:
         summary_str = sess.run(summary_op)

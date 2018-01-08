@@ -31,7 +31,7 @@ def setup(session, population, truncate_percentage):
   REPLACE_TOWER = (population * truncate_percentage + 100) / 100
   print ('Setup replace %d of tower hyperparam' % REPLACE_TOWER)
   
-def exploit(losses, hyperparams):
+def exploit(losses, hyperparams, changed_hp):
   print ('Ready, do Exploit')
   # Replace the last FLAGS.pbt_truncate_percentage of tower hyperparam with
   # the first FLAGS.pbt_truncate_percentage of tower hyperparam
@@ -53,7 +53,9 @@ def exploit(losses, hyperparams):
   print ('good losses: %s' % (good_indices))
 
   for i in xrange(REPLACE_TOWER):
-    hyperparams[bad_indices[i]] = hyperparams[good_indices[i]]
+    if hyperparams[bad_indices[i]] != hyperparams[good_indices[i]]:
+      hyperparams[bad_indices[i]] = hyperparams[good_indices[i]]
+      changed_hp[i]=True
 
   print ('new hyperparameters')
   for item in hyperparams:
@@ -62,7 +64,7 @@ def exploit(losses, hyperparams):
 
   return hyperparams
 
-def explore(hyperparams, shift_right=True, hptype=None):
+def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
   print ('do Explore')
   print ('old hyperparameters')
   for item in hyperparams:
@@ -75,13 +77,14 @@ def explore(hyperparams, shift_right=True, hptype=None):
 #    hyperparams.append(hyperparams.pop(0))
   #do mutation
   for idx, item in enumerate(hyperparams):
-   if (hptype=='learning_rate'):
-     print sess.run(item)
-     lr=sess.run(item) * random.choice([0.8,1.2])
-     #print ('new LR = %f ' % lr)
-     hyperparams[idx] = lr
-   elif (hptype=='batch_size'):
-     print ('explore batch size')
+   if (changed_hp[idx]):
+     if (hptype=='learning_rate'):
+       print sess.run(item)
+       lr=sess.run(item) * random.choice([0.8,1.2])
+       #print ('new LR = %f ' % lr)
+       hyperparams[idx] = lr
+     elif (hptype=='batch_size'):
+      print ('explore batch_size') 
   print ('new hyperparameters')
   for item in hyperparams:
     print item
