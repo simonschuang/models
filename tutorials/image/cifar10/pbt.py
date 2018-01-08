@@ -55,7 +55,7 @@ def exploit(losses, hyperparams, changed_hp):
   for i in xrange(REPLACE_TOWER):
     if hyperparams[bad_indices[i]] != hyperparams[good_indices[i]]:
       hyperparams[bad_indices[i]] = hyperparams[good_indices[i]]
-      changed_hp[i]=True
+      changed_hp[bad_indices[i]]=True
 
   print ('new hyperparameters')
   for item in hyperparams:
