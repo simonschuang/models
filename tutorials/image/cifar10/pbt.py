@@ -6,6 +6,7 @@ explore() - Perform cross-over and mutation
 
 """
 import random
+import numpy as np
 import tensorflow as tf
 from six.moves import xrange
 
@@ -80,11 +81,10 @@ def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
    if (changed_hp[idx]):
      if (hptype=='learning_rate'):
        print sess.run(item)
-       lr=sess.run(item) * random.choice([0.8,1.2])
-       #print ('new LR = %f ' % lr)
+       lr=np.multiply(sess.run(item), random.choice([0.8,1.2]), dtype=np.float32)
        hyperparams[idx] = lr
      elif (hptype=='batch_size'):
-      print ('explore batch_size') 
+       print ('explore batch_size') 
   print ('new hyperparameters')
   for item in hyperparams:
     print item

@@ -349,17 +349,15 @@ def train():
       if (step+1) % FLAGS.pbt_ready_frequency == 0 :
         # Record changed hyperparams in exploit step
         changed_hp = [False for _ in range(FLAGS.num_gpus)]
-        print (changed_hp)
         # combine or substitute lr and bs
         new_lrs = pbt.exploit(losses = loss_values, hyperparams=lrs, changed_hp=changed_hp)
         new_bss = pbt.exploit(losses = loss_values, hyperparams=bss, changed_hp=changed_hp)
-        print (changed_hp)
           
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         for idx,item in enumerate(lrs):
-          if isinstance(item, np.float64): # New lr
-            #print ('new lrs: %f' % item)
+          if isinstance(item, np.float32): # New lr
+            print ('new lrs: %f' % item)
             lr = tf.train.exponential_decay(item,
                                     global_step,
                                     decay_steps,
