@@ -352,7 +352,7 @@ def train():
         # combine or substitute lr and bs
         new_lrs = pbt.exploit(losses = loss_values, hyperparams=lrs, changed_hp=changed_hp)
         new_bss = pbt.exploit(losses = loss_values, hyperparams=bss, changed_hp=changed_hp)
-          
+        print (changed_hp) 
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         for idx,item in enumerate(lrs):

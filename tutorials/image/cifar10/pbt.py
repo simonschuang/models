@@ -85,6 +85,9 @@ def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
        hyperparams[idx] = lr
      elif (hptype=='batch_size'):
        print ('explore batch_size') 
+       hyperparams[idx] = (hyperparams[idx] + random.choice([-1, 1])) % POPULATION
+       print (type(hyperparams[idx]))
+
   print ('new hyperparameters')
   for item in hyperparams:
     print item
