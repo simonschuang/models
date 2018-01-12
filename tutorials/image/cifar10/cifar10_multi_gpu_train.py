@@ -79,6 +79,9 @@ parser.add_argument('--pbt_ready_frequency', type=int, default=20,
 parser.add_argument('--pbt_truncate_percentage', type=int, default=20,
                     help='Percentage of truncate during explore stage in PBT, default=20')
 
+parser.add_argument('--pbt_population_size', type=int, default=20,
+                    help='Number of population, default=20')
+
 parser.add_argument('--debug', type=bool, nargs="?", const=True, default=False,
                     help="Use debugger to track down bad values during training")
 
@@ -172,7 +175,7 @@ def train():
 
     # Decay the learning rate exponentially based on the number of steps.
     lrs = [] # learning rate selection
-    for i in xrange(FLAGS.num_gpus):
+    for i in xrange(FLAGS.pbt_population_size):
       lr = tf.train.exponential_decay(pbt.random_init_lr(),
                                     global_step,
                                     decay_steps,
@@ -188,7 +191,7 @@ def train():
     lower_bs = FLAGS.batch_size_lower # 32
     bs_list = list(range(lower_bs, upper_bs+1, 32))
     bss = [] # batch size selections
-    for i in xrange(FLAGS.num_gpus):
+    for i in xrange(FLAGS.pbt_population_size):
       bs = random.randint(0,len(bs_list)-1)
       bss.append(bs)
 
@@ -198,7 +201,7 @@ def train():
     for batch_size in bs_list:
       images, labels = cifar10.distorted_inputs(batch_size)
       batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-          [images, labels], capacity=2 * FLAGS.num_gpus)
+          [images, labels], capacity=2 * FLAGS.pbt_population_size)
       images_list.append(images)
       labels_list.append(labels)
       batch_queue_list.append(batch_queue)
@@ -206,19 +209,20 @@ def train():
     # Calculate the gradients for each model tower.
     tower_grads = []
     # Store loss of each tower
-    tower_losses = range(FLAGS.num_gpus)
+    tower_losses = range(FLAGS.pbt_population_size)
 
     with tf.variable_scope(tf.get_variable_scope()):
-      for i in xrange(FLAGS.num_gpus):
+      for pop in xrange(FLAGS.pbt_population_size):
+        i = pop % FLAGS.num_gpus
         with tf.device('/gpu:%d' % i):
-          with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, i)) as scope:
+          with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, pop)) as scope:
             # Dequeues one batch for the GPU
             # According to which batch_queue the tower uses
-            image_batch, label_batch = batch_queue_list[bss[i]].dequeue()
+            image_batch, label_batch = batch_queue_list[bss[pop]].dequeue()
 
             # Create an optimizer that performs gradient descent.
-            opt = tf.train.GradientDescentOptimizer(lrs[i])
-            
+            opt = tf.train.GradientDescentOptimizer(lrs[pop])
+
             # Calculate the loss for one tower of the CIFAR model. This function
             # constructs the entire CIFAR model but shares the variables across
             # all towers.
@@ -237,7 +241,7 @@ def train():
             tower_grads.append(grads)
 
             # PBT, store loss of every tower
-            tower_losses[i] = loss
+            tower_losses[pop] = loss
 
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all towers.
@@ -321,7 +325,7 @@ def train():
     sess.run(init)
 
     # Setup Population Based Training
-    pbt.setup(sess, FLAGS.num_gpus, FLAGS.pbt_truncate_percentage)
+    pbt.setup(sess, FLAGS.pbt_population_size, FLAGS.pbt_truncate_percentage)
 
     # Start the queue runners.
     tf.train.start_queue_runners(sess=sess)
@@ -337,9 +341,9 @@ def train():
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
       if step % 10 == 0:
-        num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus * FLAGS.iter_size
+        num_examples_per_step = FLAGS.batch_size * FLAGS.pbt_population_size * FLAGS.iter_size
         examples_per_sec = num_examples_per_step / duration
-        sec_per_batch = duration / (FLAGS.num_gpus * FLAGS.iter_size)
+        sec_per_batch = duration / (FLAGS.pbt_population_size * FLAGS.iter_size)
 
         format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
@@ -348,7 +352,7 @@ def train():
 
       if (step+1) % FLAGS.pbt_ready_frequency == 0 :
         # Record changed hyperparams in exploit step
-        changed_hp = [False for _ in range(FLAGS.num_gpus)]
+        changed_hp = [False for _ in range(FLAGS.pbt_population_size)]
         # combine or substitute lr and bs
         new_lrs = pbt.exploit(losses = loss_values, hyperparams=lrs, changed_hp=changed_hp)
         new_bss = pbt.exploit(losses = loss_values, hyperparams=bss, changed_hp=changed_hp)

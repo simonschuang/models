@@ -39,38 +39,37 @@ def exploit(losses, hyperparams, changed_hp):
 
   print ('Replace %d tower' % REPLACE_TOWER)
   
-  print ('old hyperparameters')
-  for item in hyperparams:
-    print item
-  print '\n'
+#  print ('old hyperparameters')
+#  for item in hyperparams:
+#    print item
+#  print '\n'
 
-  print ('Loss of each tower')
-  print (losses)
+#  print ('Loss of each tower')
+#  print (losses)
   
   bad_indices = sorted(range(POPULATION), key=lambda i: losses[i])[-REPLACE_TOWER:]
   good_indices = sorted(range(POPULATION), key=lambda i: losses[i])[:REPLACE_TOWER]
 
-  print ('bad losses: %s' % (bad_indices))
-  print ('good losses: %s' % (good_indices))
+#  print ('bad losses: %s' % (bad_indices))
+#  print ('good losses: %s' % (good_indices))
 
   for i in xrange(REPLACE_TOWER):
     if hyperparams[bad_indices[i]] != hyperparams[good_indices[i]]:
       hyperparams[bad_indices[i]] = hyperparams[good_indices[i]]
       changed_hp[bad_indices[i]]=True
 
-  print ('new hyperparameters')
-  for item in hyperparams:
-    print item
-  print '\n'
+#  print ('new hyperparameters')
+#  for item in hyperparams:
+#    print item
+#  print '\n'
 
   return hyperparams
 
 def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
-  print ('do Explore')
-  print ('old hyperparameters')
-  for item in hyperparams:
-    print item
-  print '\n'
+#  print ('old hyperparameters')
+#  for item in hyperparams:
+#    print item
+#  print '\n'
   #do crossover
 #  if (shift_right):
 #    hyperparams.insert(0,hyperparams.pop(-1))
@@ -80,18 +79,15 @@ def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
   for idx, item in enumerate(hyperparams):
    if (changed_hp[idx]):
      if (hptype=='learning_rate'):
-       print sess.run(item)
        lr=np.multiply(sess.run(item), random.choice([0.8,1.2]), dtype=np.float32)
        hyperparams[idx] = lr
      elif (hptype=='batch_size'):
-       print ('explore batch_size') 
        hyperparams[idx] = (hyperparams[idx] + random.choice([-1, 1])) % POPULATION
-       print (type(hyperparams[idx]))
 
-  print ('new hyperparameters')
-  for item in hyperparams:
-    print item
-  print '\n'
+#  print ('new hyperparameters')
+#  for item in hyperparams:
+#    print item
+#  print '\n'
   return hyperparams 
 
 def random_init_lr():
