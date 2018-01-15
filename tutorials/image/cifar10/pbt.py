@@ -33,11 +33,11 @@ def setup(session, population, truncate_percentage):
   print ('Setup replace %d of tower hyperparam' % REPLACE_TOWER)
   
 def exploit(losses, hyperparams, changed_hp):
-  print ('Ready, do Exploit')
+#  print ('Ready, do Exploit')
   # Replace the last FLAGS.pbt_truncate_percentage of tower hyperparam with
   # the first FLAGS.pbt_truncate_percentage of tower hyperparam
 
-  print ('Replace %d tower' % REPLACE_TOWER)
+#  print ('Replace %d tower' % REPLACE_TOWER)
   
 #  print ('old hyperparameters')
 #  for item in hyperparams:
@@ -66,15 +66,31 @@ def exploit(losses, hyperparams, changed_hp):
   return hyperparams
 
 def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
-#  print ('old hyperparameters')
+#  print ('[Explore] old hyperparameters')
 #  for item in hyperparams:
 #    print item
 #  print '\n'
+
+
   #do crossover
+  tmp_item = None
+  if (hptype=='learning_rate'):
+    for idx, item in enumerate(hyperparams):
+      if (idx % 2 == 1):
+        tmp_item = hyperparams[idx-1]
+        hyperparams[idx-1] = item
+        hyperparams[idx] = tmp_item
+#  print ('[Explore] cross-over hyperparameters')
+#  for item in hyperparams:
+#    print item
+#  print '\n'
+  
 #  if (shift_right):
 #    hyperparams.insert(0,hyperparams.pop(-1))
 #  else:
 #    hyperparams.append(hyperparams.pop(0))
+
+
   #do mutation
   for idx, item in enumerate(hyperparams):
    if (changed_hp[idx]):
@@ -84,7 +100,7 @@ def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
      elif (hptype=='batch_size'):
        hyperparams[idx] = (hyperparams[idx] + random.choice([-1, 1])) % POPULATION
 
-#  print ('new hyperparameters')
+#  print ('[Explore] new hyperparameters')
 #  for item in hyperparams:
 #    print item
 #  print '\n'
