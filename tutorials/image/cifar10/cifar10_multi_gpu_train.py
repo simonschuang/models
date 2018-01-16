@@ -115,7 +115,7 @@ def tower_loss(scope, images, labels):
   for l in losses + [total_loss]:
     # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
     # session. This helps the clarity of presentation on tensorboard.
-    loss_name = re.sub('%s_[0-9]*/' % cifar10.TOWER_NAME, '', l.op.name)
+    loss_name = re.sub('%s_[0-9]*/' % 'population', '', l.op.name)
     tf.summary.scalar(loss_name, l)
 
   return total_loss
@@ -215,7 +215,7 @@ def train():
       for pop in xrange(FLAGS.pbt_population_size):
         i = pop % FLAGS.num_gpus
         with tf.device('/gpu:%d' % i):
-          with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, pop)) as scope:
+          with tf.name_scope('%s_%d_%d' % (cifar10.TOWER_NAME, pop, i)) as scope:
             # Dequeues one batch for the GPU
             # According to which batch_queue the tower uses
             image_batch, label_batch = batch_queue_list[bss[pop]].dequeue()
@@ -248,7 +248,13 @@ def train():
     grads = average_gradients(tower_grads)
 
     # Add a summary to track the learning rate.
-    summaries.append(tf.summary.scalar('learning_rate', lr))
+#    for lr in lrs:
+#      summaries.append(tf.summary.histogram('learning_rate', lr))
+#      summaries.append(tf.summary.scalar('learning_rate', lr))
+
+    # Add a summary to track the batch size.
+#    for bs in bss:
+#      summaries.append(tf.summary.scalar('batch_size', bs_list[bs]))
 
     # Add histograms for gradients.
     for grad, var in grads:
@@ -280,8 +286,8 @@ def train():
 
 
     # Add histograms for trainable variables.
-    for var in tf.trainable_variables():
-      summaries.append(tf.summary.histogram(var.op.name, var))
+#    for var in tf.trainable_variables():
+#      summaries.append(tf.summary.histogram(var.op.name, var))
 
     # Track the moving averages of all trainable variables.
     variable_averages = tf.train.ExponentialMovingAverage(
@@ -320,7 +326,7 @@ def train():
 
     # Enable Debugger
     if FLAGS.debug:
-      sess = tfdbg.LocalCLIDebugWrapperSession(sess, ui_type="curses")
+      sess = tfdbg.LocalCLIDebugWrapperSession(sess, thread_name_filter="MainThread$", ui_type="curses")
 
     sess.run(init)
 
@@ -354,8 +360,8 @@ def train():
         # Record changed hyperparams in exploit step
         changed_hp = [False for _ in range(FLAGS.pbt_population_size)]
         # combine or substitute lr and bs
-        new_lrs = pbt.exploit(losses = loss_values, hyperparams=lrs, changed_hp=changed_hp)
-        new_bss = pbt.exploit(losses = loss_values, hyperparams=bss, changed_hp=changed_hp)
+        lrs = pbt.exploit(losses = loss_values, hyperparams=lrs, changed_hp=changed_hp)
+        bss = pbt.exploit(losses = loss_values, hyperparams=bss, changed_hp=changed_hp)
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         for idx,item in enumerate(lrs):
@@ -369,6 +375,7 @@ def train():
             lrs[idx]=lr
 
         bss = pbt.explore(hyperparams=bss, changed_hp=changed_hp, shift_right=False, hptype='batch_size')
+        
         
       if step % 100 == 0:
         summary_str = sess.run(summary_op)
