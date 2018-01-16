@@ -174,14 +174,10 @@ def train():
     decay_steps = int(num_batches_per_epoch * cifar10.NUM_EPOCHS_PER_DECAY / FLAGS.num_gpus)
 
     # Decay the learning rate exponentially based on the number of steps.
-    lrs = [] # learning rate selection
+    lr_holders = [] # learning rate selection
     for i in xrange(FLAGS.pbt_population_size):
-      lr = tf.train.exponential_decay(pbt.random_init_lr(),
-                                    global_step,
-                                    decay_steps,
-                                    cifar10.LEARNING_RATE_DECAY_FACTOR,
-                                    staircase=True)
-      lrs.append(lr)
+      holder = tf.placeholder(tf.float32, shape=[])
+      lr_holders.append(holder)
 
     #if(FLAGS.iter_size > 1):
     #  opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
@@ -221,7 +217,7 @@ def train():
             image_batch, label_batch = batch_queue_list[bss[pop]].dequeue()
 
             # Create an optimizer that performs gradient descent.
-            opt = tf.train.GradientDescentOptimizer(lrs[pop])
+            opt = tf.train.GradientDescentOptimizer(lr_holders[pop])
 
             # Calculate the loss for one tower of the CIFAR model. This function
             # constructs the entire CIFAR model but shares the variables across
@@ -248,7 +244,7 @@ def train():
     grads = average_gradients(tower_grads)
 
     # Add a summary to track the learning rate.
-#    for lr in lrs:
+#    for lr in lr_holders:
 #      summaries.append(tf.summary.histogram('learning_rate', lr))
 #      summaries.append(tf.summary.scalar('learning_rate', lr))
 
@@ -338,9 +334,15 @@ def train():
 
     summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
+    lrs = []
+    for i in xrange(FLAGS.pbt_population_size):
+      lr = pbt.random_init_lr()
+      lrs.append(lr)
+
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
-      _, loss_values = sess.run([train_op, tower_losses])
+      _, loss_values = sess.run([train_op, tower_losses],
+                                 feed_dict={i: d for i,d in zip(lr_holders, lrs)})
       duration = time.time() - start_time
 
       for loss_value in loss_values:
@@ -364,16 +366,6 @@ def train():
         bss = pbt.exploit(losses = loss_values, hyperparams=bss, changed_hp=changed_hp)
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
-        for idx,item in enumerate(lrs):
-          if isinstance(item, np.float32): # New lr
-            #print ('new lrs: %f' % item)
-            lr = tf.train.exponential_decay(item,
-                                    global_step,
-                                    decay_steps,
-                                    cifar10.LEARNING_RATE_DECAY_FACTOR,
-                                    staircase=True)
-            lrs[idx]=lr
-
         bss = pbt.explore(hyperparams=bss, changed_hp=changed_hp, shift_right=False, hptype='batch_size')
         
         
