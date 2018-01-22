@@ -173,11 +173,9 @@ def train():
                             FLAGS.batch_size)
     decay_steps = int(num_batches_per_epoch * cifar10.NUM_EPOCHS_PER_DECAY / FLAGS.num_gpus)
 
-    # Decay the learning rate exponentially based on the number of steps.
-    lr_holders = [] # learning rate selection
-    for i in xrange(FLAGS.pbt_population_size):
-      holder = tf.placeholder(tf.float32, shape=[])
-      lr_holders.append(holder)
+    # Learning rate placeholders for each population
+    lr_holders = [tf.placeholder(tf.float32, [], name='lr_'+str(idx))
+          for idx in xrange(FLAGS.pbt_population_size)]
 
     #if(FLAGS.iter_size > 1):
     #  opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
@@ -206,19 +204,19 @@ def train():
     tower_grads = []
     # Store loss of each tower
     tower_losses = range(FLAGS.pbt_population_size)
-
+    opts = []
     with tf.variable_scope(tf.get_variable_scope()):
       for pop in xrange(FLAGS.pbt_population_size):
         i = pop % FLAGS.num_gpus
         with tf.device('/gpu:%d' % i):
-          with tf.name_scope('%s_%d_%d' % (cifar10.TOWER_NAME, pop, i)) as scope:
+          with tf.name_scope('%s_%d_gpu_%d' % ('population', pop, i)) as scope:
             # Dequeues one batch for the GPU
             # According to which batch_queue the tower uses
             image_batch, label_batch = batch_queue_list[bss[pop]].dequeue()
 
             # Create an optimizer that performs gradient descent.
             opt = tf.train.GradientDescentOptimizer(lr_holders[pop])
-
+            opts.append(opt._learning_rate)
             # Calculate the loss for one tower of the CIFAR model. This function
             # constructs the entire CIFAR model but shares the variables across
             # all towers.
@@ -229,6 +227,7 @@ def train():
 
             # Retain the summaries from the final tower.
             summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+            summaries.append(tf.summary.scalar('opt_lr_'+str(pop), lr_holders[pop]))
 
             # Calculate the gradients for the batch of data on this CIFAR tower.
             grads = opt.compute_gradients(loss)
@@ -242,15 +241,6 @@ def train():
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all towers.
     grads = average_gradients(tower_grads)
-
-    # Add a summary to track the learning rate.
-#    for lr in lr_holders:
-#      summaries.append(tf.summary.histogram('learning_rate', lr))
-#      summaries.append(tf.summary.scalar('learning_rate', lr))
-
-    # Add a summary to track the batch size.
-#    for bs in bss:
-#      summaries.append(tf.summary.scalar('batch_size', bs_list[bs]))
 
     # Add histograms for gradients.
     for grad, var in grads:
@@ -341,7 +331,8 @@ def train():
 
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
-      _, loss_values = sess.run([train_op, tower_losses],
+      # tf.Session.run also optionally takes a dictionary of feeds, which is a mapping from tf.Tensor objects (typically tf.placeholder tensors) to values (typically Python scalars, lists, or NumPy arrays) that will be substituted for those tensors in the execution.
+      _, loss_values, opt_lrs = sess.run([train_op, tower_losses, opts],
                                  feed_dict={i: d for i,d in zip(lr_holders, lrs)})
       duration = time.time() - start_time
 
@@ -367,10 +358,12 @@ def train():
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         bss = pbt.explore(hyperparams=bss, changed_hp=changed_hp, shift_right=False, hptype='batch_size')
-        
-        
+        for lr in opt_lrs:
+          print(lr)
+
       if step % 100 == 0:
-        summary_str = sess.run(summary_op)
+        summary_str = sess.run(summary_op,
+                                 feed_dict={i: d for i,d in zip(lr_holders, lrs)})
         summary_writer.add_summary(summary_str, step)
 
       # Save the model checkpoint periodically.
