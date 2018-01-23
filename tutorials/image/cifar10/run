@@ -1,0 +1,13 @@
+#!/bin/bash
+trap "echo TRAP!!; exit" SIGTERM SIGINT SIGHUP
+sudo CUDA_VISIBLE_DEVICES=0,1,2 python cifar10_multi_gpu_train.py \
+  --num_gpus=3 \
+  --max_steps=1200 \
+  --batch_size=128 \
+  --batch_size_upper=128 \
+  --batch_size_lower=32 \
+  --apply_pbt=true \
+  --pbt_ready_frequency=50 \
+  --pbt_truncate_percentage=20 \
+  --pbt_population_size=40 \
+#  --debug true
