@@ -184,27 +184,25 @@ def train():
     upper_bs = FLAGS.batch_size_upper # 128
     lower_bs = FLAGS.batch_size_lower # 32
     bs_list = list(range(lower_bs, upper_bs+1, 32))
+    bs_key_holders = [tf.placeholder(tf.int8, [1], name='bs_'+str(idx))
+          for idx in xrange(FLAGS.pbt_population_size)]
     bss = [] # batch size selections
     for i in xrange(FLAGS.pbt_population_size):
       bs = random.randint(0,len(bs_list)-1)
       bss.append(bs)
 
-    images_list = []
-    labels_list = []
     batch_queue_list = []
     for batch_size in bs_list:
       images, labels = cifar10.distorted_inputs(batch_size)
       batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-          [images, labels], capacity=2 * FLAGS.pbt_population_size)
-      images_list.append(images)
-      labels_list.append(labels)
+          [images, labels], capacity= 2 * FLAGS.pbt_population_size)
       batch_queue_list.append(batch_queue)
 
     # Calculate the gradients for each model tower.
     tower_grads = []
     # Store loss of each tower
     tower_losses = range(FLAGS.pbt_population_size)
-    opts = []
+    hparams = []
     with tf.variable_scope(tf.get_variable_scope()):
       for pop in xrange(FLAGS.pbt_population_size):
         i = pop % FLAGS.num_gpus
@@ -216,7 +214,7 @@ def train():
 
             # Create an optimizer that performs gradient descent.
             opt = tf.train.GradientDescentOptimizer(lr_holders[pop])
-            opts.append(opt._learning_rate)
+            hparams.append((opt._learning_rate, tf.size(label_batch)))
             # Calculate the loss for one tower of the CIFAR model. This function
             # constructs the entire CIFAR model but shares the variables across
             # all towers.
@@ -332,7 +330,7 @@ def train():
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
       # tf.Session.run also optionally takes a dictionary of feeds, which is a mapping from tf.Tensor objects (typically tf.placeholder tensors) to values (typically Python scalars, lists, or NumPy arrays) that will be substituted for those tensors in the execution.
-      _, loss_values, opt_lrs = sess.run([train_op, tower_losses, opts],
+      _, loss_values, hpms = sess.run([train_op, tower_losses, hparams],
                                  feed_dict={i: d for i,d in zip(lr_holders, lrs)})
       duration = time.time() - start_time
 
@@ -358,8 +356,8 @@ def train():
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         bss = pbt.explore(hyperparams=bss, changed_hp=changed_hp, shift_right=False, hptype='batch_size')
-        for lr in opt_lrs:
-          print(lr)
+        for hpm in hpms:
+          print(hpm)
 
       if step % 100 == 0:
         summary_str = sess.run(summary_op,
