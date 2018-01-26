@@ -97,8 +97,8 @@ def explore(hyperparams, changed_hp, shift_right=True, hptype=None):
      if (hptype=='learning_rate'):
        lr=np.multiply(item, random.choice([0.8,1.2]), dtype=np.float32)
        hyperparams[idx] = lr
-     elif (hptype=='batch_size'):
-       hyperparams[idx] = (hyperparams[idx] + random.choice([-1, 1])) % POPULATION
+#     elif (hptype=='batch_size'):
+#       hyperparams[idx] = (hyperparams[idx] + 32*random.choice([-1, 1])) 
 
 #  print ('[Explore] new hyperparameters')
 #  for item in hyperparams:

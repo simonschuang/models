@@ -1,8 +1,8 @@
 #!/bin/bash
 trap "echo TRAP!!; exit" SIGTERM SIGINT SIGHUP
-sudo CUDA_VISIBLE_DEVICES=0,1,2 python cifar10_multi_gpu_train.py \
-  --num_gpus=3 \
-  --max_steps=1200 \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python cifar10_multi_gpu_train.py \
+  --num_gpus=8 \
+  --max_steps=100000 \
   --batch_size=128 \
   --batch_size_upper=128 \
   --batch_size_lower=32 \

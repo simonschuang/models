@@ -187,8 +187,9 @@ def train():
     bs_key_holders = [tf.placeholder(tf.int8, [1], name='bs_'+str(idx))
           for idx in xrange(FLAGS.pbt_population_size)]
     bss = [] # batch size selections
-    for i in xrange(FLAGS.pbt_population_size):
-      bs = random.randint(0,len(bs_list)-1)
+    for pop in xrange(FLAGS.pbt_population_size):
+      #bs = random.choice(bs_list)
+      bs = bs_list[pop%len(bs_list)]
       bss.append(bs)
 
     batch_queue_list = []
@@ -198,19 +199,25 @@ def train():
           [images, labels], capacity= 2 * FLAGS.pbt_population_size)
       batch_queue_list.append(batch_queue)
 
+    bq_dict = dict(zip(bs_list,batch_queue_list))
+
     # Calculate the gradients for each model tower.
     tower_grads = []
     # Store loss of each tower
     tower_losses = range(FLAGS.pbt_population_size)
     hparams = []
+
+    pop_list = [pop for pop in xrange(FLAGS.pbt_population_size)]
+    pop_batch_tuple = zip(pop_list , sorted([pop % FLAGS.num_gpus for pop in xrange(FLAGS.pbt_population_size)]))
+
     with tf.variable_scope(tf.get_variable_scope()):
-      for pop in xrange(FLAGS.pbt_population_size):
-        i = pop % FLAGS.num_gpus
-        with tf.device('/gpu:%d' % i):
-          with tf.name_scope('%s_%d_gpu_%d' % ('population', pop, i)) as scope:
+      for pop, gpu_id in pop_batch_tuple:
+        # pop is divided into `num_gpus` shares, each share executed by one gpu in order 
+        with tf.device('/gpu:%d' % gpu_id):
+          with tf.name_scope('%s_%d_gpu_%d' % ('population', pop, gpu_id)) as scope:
             # Dequeues one batch for the GPU
             # According to which batch_queue the tower uses
-            image_batch, label_batch = batch_queue_list[bss[pop]].dequeue()
+            image_batch, label_batch = bq_dict.get(bss[pop]).dequeue()
 
             # Create an optimizer that performs gradient descent.
             opt = tf.train.GradientDescentOptimizer(lr_holders[pop])
@@ -356,8 +363,8 @@ def train():
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         bss = pbt.explore(hyperparams=bss, changed_hp=changed_hp, shift_right=False, hptype='batch_size')
-        for hpm in hpms:
-          print(hpm)
+        #for hpm in hpms:
+        #  print(hpm)
 
       if step % 100 == 0:
         summary_str = sess.run(summary_op,
