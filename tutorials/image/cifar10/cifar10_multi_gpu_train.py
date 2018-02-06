@@ -208,10 +208,10 @@ def train():
     hparams = []
 
     pop_list = [pop for pop in xrange(FLAGS.pbt_population_size)]
-    pop_batch_tuple = zip(pop_list , sorted([pop % FLAGS.num_gpus for pop in xrange(FLAGS.pbt_population_size)]))
+    pop_gpu_tuple = zip(pop_list , sorted([pop % FLAGS.num_gpus for pop in xrange(FLAGS.pbt_population_size)]))
 
     with tf.variable_scope(tf.get_variable_scope()):
-      for pop, gpu_id in pop_batch_tuple:
+      for pop, gpu_id in pop_gpu_tuple:
         # pop is divided into `num_gpus` shares, each share executed by one gpu in order 
         with tf.device('/gpu:%d' % gpu_id):
           with tf.name_scope('%s_%d_gpu_%d' % ('population', pop, gpu_id)) as scope:
@@ -351,7 +351,7 @@ def train():
 
         format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
-        print (format_str % (datetime.now(), step, loss_value,
+        print (format_str % (datetime.now(), step, min(loss_values),
                             examples_per_sec, sec_per_batch))
 
       if (step+1) % FLAGS.pbt_ready_frequency == 0 :
