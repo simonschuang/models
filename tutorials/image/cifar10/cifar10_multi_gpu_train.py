@@ -52,6 +52,7 @@ from tensorflow.python import debug as tfdbg
 #import tensorpack as tp
 import cifar10
 import pbt
+import cifar10_eval
 
 parser = cifar10.parser
 
@@ -118,7 +119,7 @@ def tower_loss(scope, images, labels):
     loss_name = re.sub('%s_[0-9]*/' % 'population', '', l.op.name)
     tf.summary.scalar(loss_name, l)
 
-  return total_loss
+  return total_loss, logits
 
 
 def average_gradients(tower_grads):
@@ -177,6 +178,17 @@ def train():
     lr_holders = [tf.placeholder(tf.float32, [], name='lr_'+str(idx))
           for idx in xrange(FLAGS.pbt_population_size)]
 
+    lrs = []
+    opts = []
+    for i in xrange(FLAGS.pbt_population_size):
+      lr = pbt.random_init_lr()
+      lrs.append(lr)
+
+    for lr in lrs:
+      opts.append(tf.train.GradientDescentOptimizer(lr))
+      
+
+
     #if(FLAGS.iter_size > 1):
     #  opt = tp.optimizer.AccumGradOptimizer(opt, FLAGS.iter_size)
 
@@ -206,6 +218,8 @@ def train():
     # Store loss of each tower
     tower_losses = range(FLAGS.pbt_population_size)
     hparams = []
+    precisions = []
+    apply_gradient_ops = []
 
     pop_list = [pop for pop in xrange(FLAGS.pbt_population_size)]
     pop_gpu_tuple = zip(pop_list , sorted([pop % FLAGS.num_gpus for pop in xrange(FLAGS.pbt_population_size)]))
@@ -219,13 +233,18 @@ def train():
             # According to which batch_queue the tower uses
             image_batch, label_batch = bq_dict.get(bss[pop]).dequeue()
 
+            # PBT update learning rate, here we make each opt use current learning rate,
+            # which may be changed after exploit/explore
+            print(lr_holders[pop])
+
             # Create an optimizer that performs gradient descent.
-            opt = tf.train.GradientDescentOptimizer(lr_holders[pop])
-            hparams.append((opt._learning_rate, tf.size(label_batch)))
+            #opt = tf.train.GradientDescentOptimizer(lr_holders[pop])
+            hparams.append((opts[pop]._learning_rate, tf.size(label_batch)))
+
             # Calculate the loss for one tower of the CIFAR model. This function
             # constructs the entire CIFAR model but shares the variables across
             # all towers.
-            loss = tower_loss(scope, image_batch, label_batch)
+            loss, logits = tower_loss(scope, image_batch, label_batch)
 
             # Reuse variables for the next tower.
             tf.get_variable_scope().reuse_variables()
@@ -235,18 +254,24 @@ def train():
             summaries.append(tf.summary.scalar('opt_lr_'+str(pop), lr_holders[pop]))
 
             # Calculate the gradients for the batch of data on this CIFAR tower.
-            grads = opt.compute_gradients(loss)
+            grads = opts[pop].compute_gradients(loss)
 
             # Keep track of the gradients across all towers.
             tower_grads.append(grads)
 
             # PBT, store loss of every tower
             tower_losses[pop] = loss
+#            try :
+#                precision = cifar10_eval.evaluate()
+#                precisions.append(precision)
+#            except:
+#	        pass
 
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all towers.
     grads = average_gradients(tower_grads)
 
+    
     # Add histograms for gradients.
     for grad, var in grads:
       if grad is not None:
@@ -273,7 +298,8 @@ def train():
       
       #increment_global_step_cond_op = tf.assign(global_step, global_step + FLAGS.iter_size)
     else:
-      apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+      for idx, opt in enumerate(opts):
+        apply_gradient_ops.append(opt.apply_gradients(grads, global_step=global_step))
 
 
     # Add histograms for trainable variables.
@@ -287,9 +313,9 @@ def train():
 
     # Group all updates to into a single train op.
     if(FLAGS.iter_size > 1):
-      train_op = tf.group(apply_gradient_op, variables_averages_op, increment_global_step_cond_op, counter_op)
+      train_op = tf.group(apply_gradient_ops, variables_averages_op, increment_global_step_cond_op, counter_op)
     else:
-      train_op = tf.group(apply_gradient_op, variables_averages_op)
+      train_op = tf.group(apply_gradient_ops, variables_averages_op)
 
     # Create a saver.
     saver = tf.train.Saver(tf.global_variables())
@@ -329,11 +355,6 @@ def train():
 
     summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
-    lrs = []
-    for i in xrange(FLAGS.pbt_population_size):
-      lr = pbt.random_init_lr()
-      lrs.append(lr)
-
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
       # tf.Session.run also optionally takes a dictionary of feeds, which is a mapping from tf.Tensor objects (typically tf.placeholder tensors) to values (typically Python scalars, lists, or NumPy arrays) that will be substituted for those tensors in the execution.
@@ -341,8 +362,10 @@ def train():
                                  feed_dict={i: d for i,d in zip(lr_holders, lrs)})
       duration = time.time() - start_time
 
-      for loss_value in loss_values:
-        assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
+      for idx, loss_value in enumerate(loss_values):
+         if np.isnan(loss_value):
+           lrs[idx] = pbt.random_init_lr()
+#        assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
       if step % 10 == 0:
         num_examples_per_step = FLAGS.batch_size * FLAGS.pbt_population_size * FLAGS.iter_size
@@ -363,8 +386,10 @@ def train():
         # find new lr and bs
         lrs = pbt.explore(hyperparams=lrs, changed_hp=changed_hp, shift_right=True, hptype='learning_rate')
         bss = pbt.explore(hyperparams=bss, changed_hp=changed_hp, shift_right=False, hptype='batch_size')
-        #for hpm in hpms:
-        #  print(hpm)
+        for hpm in hpms:
+          print(hpm)
+#        for precision in precisions:
+#          print(precision)
 
       if step % 100 == 0:
         summary_str = sess.run(summary_op,
